@@ -1,4 +1,6 @@
-# Design and operational contract
+# Core design and operational contract
+
+This page describes the preserved code-authored runtime and observation map. Optional composition and authoring extensions use the same durable actions and accounting. Read the [TS port design](designs/ts-port.md), [typed children](designs/child-workflows.md), [profiles](designs/profiles.md), [portable files](designs/portable-files.md), [Studio](designs/studio.md), [declared inspection](designs/declared-inspection.md), and [candidate verification](designs/candidate-verification.md) for their current contracts. The v1 store gains additive workflow tables without rewriting historical receipts or ledger rows.
 
 ## File map
 
@@ -13,12 +15,12 @@
 | `scripts/codex-launcher.mjs`, `scripts/opencode-policy/index.mjs` | Byte-only process lifecycle shim; native retry-policy hook                                                 |
 | `src/process.ts`                                                  | Shell-free argv commands, bounded output, process-group cleanup                                            |
 | `src/{cli,http,config}.ts`                                        | CLI/module loading, read-only localhost polling/SSE, explicit agent configuration                          |
-| `src/web/*`                                                       | Plain, read-only local UI; literal content rendering and bounded same-origin GET polling                   |
+| `src/web/*`                                                       | Legacy read-only inspector; Studio and declared graph extensions have separate linked designs              |
 | `scripts/{ui-fixture,verify-ui}.ts`                               | Synthetic offline browser regression and Playwright video recording; no providers                          |
 | `scripts/qualify.ts`                                              | Opt-in shared-budget live qualification; never invoked by checks                                           |
 | `test/`                                                           | Runtime, shared adapter contract, injected exact SDK seams, real local process/HTTP/crash tests            |
 
-No plugin discovery framework, task graph, orchestration service, provider pricing service, or application replay engine. The tiny OpenCode policy module uses a vendor retry hook solely to decline retry-policy decisions. It does not control every vendor transport recovery path; see [the current source-check limits](sdk-upgrade-20260930.md).
+The baseline module API needs no plugin discovery framework, orchestration service, provider pricing service, or separate application replay engine. Optional portable graphs lower to the same durable runtime. The tiny OpenCode policy module uses a vendor retry hook solely to decline retry-policy decisions. It does not control every vendor transport recovery path; see [the current source-check limits](sdk-upgrade-20260930.md).
 
 ## Authoring/API
 
@@ -35,7 +37,7 @@ Workflow authors supply an identity that changes when relevant workflow code/dep
 
 ## Storage and resume
 
-One shared database, default `.asf/store.db`, holds runs, actions, invocations, sessions, reports, final ledger, budgets, and events. SQLite WAL + `synchronous=FULL`; Node's built-in SQLite is experimental in Node 22. No ORM or external database process. Schema `user_version=1`, unknown versions rejected. This first release has no historical migrations.
+One shared database, default `.asf/store.db`, holds runs, actions, invocations, sessions, reports, final ledger, budgets, and events. SQLite WAL + `synchronous=FULL`; Node's built-in SQLite is experimental in Node 22. No ORM or external database process. Schema `user_version=1`, unknown versions rejected. Historical v1 records remain intact. The extended runtime adds workflow tables without rewriting them; see [ADR 0212](adr/0212-local-actions-and-storage-compatibility.md).
 
 1. Claim the run atomically using PID plus random owner token. A live PID blocks another executor, even after PID reuse. A dead PID can be reclaimed, but outstanding reservations become **uncertain**. Local machine only: do not share this store across hosts/NFS or PID namespaces.
 2. Check stable action request identity: prompt/context/schema, config/protocol/policy binding, session handle, and bounds. A changed action is rejected before dispatch. Completed actions return stored results and emit only a replay observation.

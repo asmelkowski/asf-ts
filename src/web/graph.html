@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ASF · declared workflow inspection</title>
+    <link rel="stylesheet" href="/graph.css" />
+    <script src="/graph.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <nav>
+        <a href="/">Inspect runs</a> · <a href="/studio">Author a workflow</a> ·
+        <strong>Declared graphs</strong>
+      </nav>
+      <h1>ASF · declared workflow inspection</h1>
+      <p>
+        Read-only stored source and receipts. Edges come from the authored
+        document. Observed order does not establish causality.
+      </p>
+      <p>
+        Results, inputs, and receipts are sensitive, untrusted content. Known
+        cost subtotals cover reported scope and are not invoices.
+      </p>
+      <a href="/">Open the observation map</a>
+    </header>
+    <main>
+      <section aria-labelledby="load-heading">
+        <h2 id="load-heading">Select recorded work</h2>
+        <label for="graph-runs">Recent runs (first 200)</label>
+        <select id="graph-runs">
+          <option value="">Choose a run</option>
+        </select>
+        <label for="graph-run">Run ID</label>
+        <input id="graph-run" type="text" maxlength="200" autocomplete="off" />
+        <button id="graph-load">Load recorded graph</button>
+        <p id="graph-status" role="status" aria-live="polite"></p>
+      </section>
+      <section id="graph-workspace" hidden aria-labelledby="graph-run-heading">
+        <h2 id="graph-run-heading"></h2>
+        <p id="graph-cost"></p>
+        <p id="graph-coverage"></p>
+        <ul id="graph-warnings"></ul>
+        <button id="graph-prev">Previous record window</button>
+        <button id="graph-next">Next record window</button>
+        <label for="graph-invocation">Workflow invocation / attempt</label>
+        <select id="graph-invocation"></select>
+        <p id="graph-empty" hidden>
+          No declared workflow snapshot in this window. The observation map
+          remains available for ordinary code-authored runs.
+        </p>
+        <div id="graph-selected" hidden>
+          <section aria-labelledby="graph-title">
+            <h3 id="graph-title"></h3>
+            <p id="graph-lifecycle"></p>
+            <p id="graph-verdict"></p>
+            <p id="graph-binding"></p>
+            <div id="graph-parent"></div>
+            <p>
+              Node states and child links cover loaded records only. Unobserved
+              nodes are not proof of skipped work. Select a node with the mouse
+              or keyboard.
+            </p>
+            <div class="graph-layout">
+              <div
+                class="graph-scroll"
+                id="graph-diagram"
+                aria-label="Declared graph with recorded node states"
+              ></div>
+              <div>
+                <h4>Declared nodes</h4>
+                <div id="graph-node-list"></div>
+              </div>
+            </div>
+          </section>
+          <section id="graph-node-detail" aria-labelledby="graph-node-title">
+            <h3 id="graph-node-title">Select a declared node</h3>
+            <div id="graph-node-evidence"></div>
+          </section>
+          <section aria-labelledby="graph-receipt-title">
+            <h3 id="graph-receipt-title">Selected native / local receipt</h3>
+            <pre id="graph-receipt">
+Select an exact receipt ID from a node.</pre
+            >
+          </section>
+          <details>
+            <summary>Workflow binding, raw aggregate, and typed result</summary>
+            <pre id="graph-workflow-proof"></pre>
+          </details>
+          <details>
+            <summary>Stored authored source document</summary>
+            <pre id="graph-source"></pre>
+          </details>
+          <details>
+            <summary>Unmapped actions in this window</summary>
+            <pre id="graph-unmapped"></pre>
+          </details>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

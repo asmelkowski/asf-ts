@@ -1,0 +1,18 @@
+{
+  "format": "asf-persona-catalogue/v1",
+  "models": ["synthetic-review-model"],
+  "tools": ["read_file", "run_checks"],
+  "plugins": [
+    {
+      "id": "synthetic/review-guidance",
+      "name": "Synthetic review guidance",
+      "description": "Pinned discovery fixture. A recipient must provide a matching active local binding.",
+      "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "id": "synthetic/discovery-only",
+      "name": "Synthetic discovery entry",
+      "description": "This unpinned fixture can be viewed but cannot be selected as a new requirement."
+    }
+  ]
+}

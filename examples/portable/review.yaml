@@ -1,0 +1,28 @@
+format: asf-ts-workflow/v1
+root: delivery
+workflows:
+  delivery:
+    version: "1"
+    inputSchema: {}
+    outputSchema: {}
+    start: review
+    nodes:
+      - id: review
+        kind: workflow
+        workflow: verification
+        input: { $ref: "#/input" }
+        maxDispatches: 2
+        timeoutMs: 30000
+        next: end
+      - id: end
+        kind: end
+        output: { $ref: "#/nodes/review" }
+  verification:
+    version: "1"
+    inputSchema: {}
+    outputSchema: {}
+    start: end
+    nodes:
+      - id: end
+        kind: end
+        output: { $ref: "#/input" }

@@ -1,0 +1,55 @@
+format: asf-ts-workflow/v1
+root: delivery
+profiles:
+  worker:
+    instructions: Call marker, then return the marker as JSON.
+    instructionsChannel: native-system
+    model: asf-local-proof
+    mode: write
+    tools: [marker]
+    strict: true
+workflows:
+  delivery:
+    version: "1"
+    inputSchema: { type: object, additionalProperties: false }
+    outputSchema:
+      type: object
+      properties: { ok: { type: boolean }, marker: { type: string } }
+      required: [ok, marker]
+      additionalProperties: false
+    start: review
+    nodes:
+      - id: review
+        kind: workflow
+        workflow: review
+        input: { $ref: "#/input" }
+        maxDispatches: 1
+        next: end
+      - id: end
+        kind: end
+        output: { $ref: "#/nodes/review" }
+        passed: { $ref: "#/nodes/review/ok" }
+  review:
+    version: "1"
+    inputSchema: { type: object, additionalProperties: false }
+    outputSchema:
+      type: object
+      properties: { ok: { type: boolean }, marker: { type: string } }
+      required: [ok, marker]
+      additionalProperties: false
+    defaultProfile: worker
+    start: reviewer
+    nodes:
+      - id: reviewer
+        kind: agent
+        prompt: Call marker, then return typed JSON.
+        outputSchema:
+          type: object
+          properties: { ok: { type: boolean }, marker: { type: string } }
+          required: [ok, marker]
+          additionalProperties: false
+        next: end
+      - id: end
+        kind: end
+        output: { $ref: "#/nodes/reviewer" }
+        passed: { $ref: "#/nodes/reviewer/ok" }

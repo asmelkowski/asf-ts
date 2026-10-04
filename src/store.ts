@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync, chmodSync } from "node:fs";
 import { dirname } from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { encode, parse, clip, positive, boundedJson, hash } from "./util.js";
 import {
   validateAccounting,
@@ -9,6 +9,7 @@ import {
   strongestAccounting,
 } from "./accounting.js";
 import type { Accounting, Json, NativeSession, Receipt } from "./types.js";
+import { WorkflowTimeoutError } from "./composition.js";
 
 import type { Inspection, RunSummary, EventRow } from "./inspection.js";
 export type { EventRow } from "./inspection.js";
@@ -32,6 +33,54 @@ export interface Budget {
   id: string;
   maxDispatches: number;
   softUsd: number;
+}
+export interface WorkflowBinding {
+  definitionIdentity: string;
+  inputIdentity: string;
+  input: Json;
+  parentInvocation: string | null;
+  attempt: number;
+  maxDispatches: number | null;
+  timeoutMs: number;
+}
+export interface WorkflowRow {
+  id: string;
+  parent: string | null;
+  definition: string;
+  binding: string;
+  deadline: number;
+  status: string;
+  raw: string | null;
+  result: string | null;
+  error: string | null;
+}
+export interface WorkflowInspection {
+  offset: number;
+  limit: number;
+  counts: {
+    documents: number;
+    definitions: number;
+    workflows: number;
+    actions: number;
+  };
+  documents: { identity: string; value: Json }[];
+  definitions: {
+    identity: string;
+    value: Json;
+    documentIdentity: string | null;
+  }[];
+  workflows: (Omit<WorkflowRow, "binding" | "raw" | "result"> & {
+    binding: WorkflowBinding;
+    raw: Json | null;
+    result: Json | null;
+    dispatchesUsed: number;
+  })[];
+  actions: {
+    id: string;
+    kind: string;
+    workflow: string | null;
+    metadata: Json | null;
+  }[];
 }
 export class Store {
   readonly db: DatabaseSync;
@@ -62,6 +111,19 @@ export class Store {
       CREATE TABLE IF NOT EXISTS ledger(invocation TEXT PRIMARY KEY REFERENCES invocations(id), data TEXT NOT NULL, usd REAL, complete INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS events(cursor INTEGER PRIMARY KEY AUTOINCREMENT, run TEXT NOT NULL, action TEXT, invocation TEXT, turn INTEGER, source TEXT, time INTEGER NOT NULL, type TEXT NOT NULL, data TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS event_run ON events(run,cursor);
+      CREATE TABLE IF NOT EXISTS workflow_documents(run TEXT NOT NULL REFERENCES runs(id), identity TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(run,identity));
+      CREATE TABLE IF NOT EXISTS workflow_definitions(run TEXT NOT NULL REFERENCES runs(id), identity TEXT NOT NULL, value TEXT NOT NULL, document TEXT, PRIMARY KEY(run,identity), FOREIGN KEY(run,document) REFERENCES workflow_documents(run,identity));
+      CREATE TABLE IF NOT EXISTS workflows(run TEXT NOT NULL REFERENCES runs(id), id TEXT NOT NULL, parent TEXT, definition TEXT NOT NULL, binding TEXT NOT NULL, deadline INTEGER NOT NULL, status TEXT NOT NULL, raw TEXT, result TEXT, error TEXT, PRIMARY KEY(run,id), FOREIGN KEY(run,parent) REFERENCES workflows(run,id), FOREIGN KEY(run,definition) REFERENCES workflow_definitions(run,identity));
+      CREATE TABLE IF NOT EXISTS action_owners(run TEXT NOT NULL, id TEXT NOT NULL, kind TEXT NOT NULL, workflow TEXT, metadata TEXT, PRIMARY KEY(run,id), FOREIGN KEY(run,id) REFERENCES actions(run,id), FOREIGN KEY(run,workflow) REFERENCES workflows(run,id));
+      CREATE TABLE IF NOT EXISTS workflow_usage(run TEXT NOT NULL, workflow TEXT NOT NULL, invocation TEXT NOT NULL REFERENCES invocations(id), PRIMARY KEY(run,workflow,invocation), FOREIGN KEY(run,workflow) REFERENCES workflows(run,id));
+      CREATE TRIGGER IF NOT EXISTS workflow_binding_immutable BEFORE UPDATE OF binding,deadline,definition,parent ON workflows BEGIN SELECT RAISE(ABORT,'immutable workflow binding'); END;
+      CREATE TRIGGER IF NOT EXISTS workflow_raw_immutable BEFORE UPDATE OF raw ON workflows WHEN OLD.raw IS NOT NULL BEGIN SELECT RAISE(ABORT,'immutable workflow raw result'); END;
+      CREATE TRIGGER IF NOT EXISTS workflow_result_immutable BEFORE UPDATE OF result ON workflows WHEN OLD.result IS NOT NULL BEGIN SELECT RAISE(ABORT,'immutable workflow result'); END;
+      CREATE TRIGGER IF NOT EXISTS workflow_document_immutable BEFORE UPDATE ON workflow_documents BEGIN SELECT RAISE(ABORT,'immutable workflow document'); END;
+      CREATE TRIGGER IF NOT EXISTS workflow_definition_immutable BEFORE UPDATE ON workflow_definitions BEGIN SELECT RAISE(ABORT,'immutable workflow definition'); END;
+      CREATE TRIGGER IF NOT EXISTS action_owner_immutable BEFORE UPDATE ON action_owners BEGIN SELECT RAISE(ABORT,'immutable action owner'); END;
+      CREATE TRIGGER IF NOT EXISTS workflow_usage_immutable BEFORE UPDATE ON workflow_usage BEGIN SELECT RAISE(ABORT,'immutable workflow usage'); END;
+      CREATE TRIGGER IF NOT EXISTS workflow_usage_no_delete BEFORE DELETE ON workflow_usage BEGIN SELECT RAISE(ABORT,'immutable workflow usage'); END;
       CREATE TRIGGER IF NOT EXISTS ledger_immutable BEFORE UPDATE ON ledger BEGIN SELECT RAISE(ABORT,'immutable ledger'); END;
       CREATE TRIGGER IF NOT EXISTS ledger_no_delete BEFORE DELETE ON ledger BEGIN SELECT RAISE(ABORT,'immutable ledger'); END;
       CREATE TRIGGER IF NOT EXISTS report_no_delete BEFORE DELETE ON reports BEGIN SELECT RAISE(ABORT,'immutable report'); END;
@@ -71,6 +133,268 @@ export class Store {
   }
   close(): void {
     this.db.close();
+  }
+  workflow(run: string, id: string): WorkflowRow | undefined {
+    return this.db
+      .prepare("SELECT * FROM workflows WHERE run=? AND id=?")
+      .get(run, id) as unknown as WorkflowRow | undefined;
+  }
+  assertNamespace(run: string, id: string, owner: string | null): void {
+    const rows = this.db
+      .prepare("SELECT id FROM workflows WHERE run=?")
+      .all(run);
+    const expected =
+      rows
+        .map((row) => String(row.id))
+        .filter((prefix) => id.startsWith(prefix + "/"))
+        .sort((a, b) => b.length - a.length)[0] ?? null;
+    if (expected !== owner)
+      throw new Error("Workflow namespace belongs to another scope");
+  }
+  bindWorkflow(
+    run: string,
+    id: string,
+    binding: WorkflowBinding,
+    definition: Json,
+    document?: Json,
+  ): WorkflowRow {
+    return this.transaction(() => {
+      this.assertNamespace(run, id, binding.parentInvocation);
+      const old = this.workflow(run, id);
+      const encoded = encode(binding);
+      if (old) {
+        if (old.binding !== encoded)
+          throw new Error("Workflow definition, input, or limits changed");
+        return old;
+      }
+      const occupied = this.db
+        .prepare("SELECT id FROM actions WHERE run=?")
+        .all(run)
+        .some(
+          (row) => String(row.id) === id || String(row.id).startsWith(id + "/"),
+        );
+      if (occupied)
+        throw new Error(
+          "Workflow namespace already contains unrelated actions",
+        );
+      const existing = this.db
+        .prepare(
+          "SELECT * FROM workflow_definitions WHERE run=? AND identity=?",
+        )
+        .get(run, binding.definitionIdentity);
+      let documentIdentity: string | null = null;
+      if (!existing) {
+        if (document !== undefined) {
+          documentIdentity = createHash("sha256")
+            .update(encode(document, 1024 * 1024))
+            .digest("hex");
+          this.db
+            .prepare("INSERT OR IGNORE INTO workflow_documents VALUES(?,?,?)")
+            .run(run, documentIdentity, encode(document, 1024 * 1024));
+        } else if (binding.parentInvocation) {
+          documentIdentity = this.db
+            .prepare(
+              "SELECT d.document FROM workflows w JOIN workflow_definitions d ON d.run=w.run AND d.identity=w.definition WHERE w.run=? AND w.id=?",
+            )
+            .get(run, binding.parentInvocation)?.document as string | null;
+        }
+        this.db
+          .prepare("INSERT INTO workflow_definitions VALUES(?,?,?,?)")
+          .run(
+            run,
+            binding.definitionIdentity,
+            encode(definition),
+            documentIdentity,
+          );
+      } else if (existing.value !== encode(definition))
+        throw new Error("Workflow definition identity collision");
+      const parentDeadline = binding.parentInvocation
+        ? this.workflow(run, binding.parentInvocation)?.deadline
+        : undefined;
+      const deadline = Math.min(
+        Date.now() + binding.timeoutMs,
+        parentDeadline ?? Infinity,
+      );
+      this.db
+        .prepare(
+          "INSERT INTO workflows VALUES(?,?,?,?,?,?,'pending',NULL,NULL,NULL)",
+        )
+        .run(
+          run,
+          id,
+          binding.parentInvocation,
+          binding.definitionIdentity,
+          encoded,
+          deadline,
+        );
+      return this.workflow(run, id)!;
+    });
+  }
+  startWorkflow(run: string, id: string): void {
+    this.transaction(() => {
+      this.db
+        .prepare(
+          "UPDATE workflows SET status='running',error=NULL WHERE run=? AND id=?",
+        )
+        .run(run, id);
+      this.event(run, id, null, null, "workflow.started", {});
+    });
+  }
+  private workflowAncestors(run: string, owner: string | null): WorkflowRow[] {
+    const rows: WorkflowRow[] = [];
+    while (owner) {
+      if (rows.length >= 32 || rows.some((row) => row.id === owner))
+        throw new Error("Workflow ancestry exceeds its bound");
+      const row = this.workflow(run, owner);
+      if (!row) throw new Error("Unknown workflow owner");
+      rows.push(row);
+      owner = row.parent;
+    }
+    return rows;
+  }
+  checkWorkflow(run: string, owner: string | null): void {
+    for (const row of this.workflowAncestors(run, owner)) {
+      if (row.deadline <= Date.now())
+        throw new WorkflowTimeoutError("Workflow deadline expired");
+      if (row.status !== "running")
+        throw new Error("Workflow scope is no longer active");
+    }
+  }
+  workflowRaw(run: string, id: string, value: unknown): void {
+    const raw = encode(value, 1024 * 1024);
+    this.db
+      .prepare(
+        "UPDATE workflows SET raw=? WHERE run=? AND id=? AND raw IS NULL",
+      )
+      .run(raw, run, id);
+  }
+  finishWorkflow(run: string, id: string, value: Json): void {
+    this.transaction(() => {
+      this.checkWorkflow(run, id);
+      this.db
+        .prepare(
+          "UPDATE workflows SET status='completed',result=?,error=NULL WHERE run=? AND id=?",
+        )
+        .run(encode(value, 1024 * 1024), run, id);
+      this.event(run, id, null, null, "workflow.completed", {});
+    });
+  }
+  failWorkflow(run: string, id: string, status: string, error: string): void {
+    this.transaction(() => {
+      this.db
+        .prepare("UPDATE workflows SET status=?,error=? WHERE run=? AND id=?")
+        .run(status, error, run, id);
+      this.event(run, id, null, null, `workflow.${status}`, {
+        error: clip(error, 4096),
+      });
+    });
+  }
+  workflowBlocked(run: string, id: string): boolean {
+    return this.db
+      .prepare(
+        "SELECT a.id FROM actions a JOIN action_owners o ON o.run=a.run AND o.id=a.id WHERE a.run=? AND a.status='pending'",
+      )
+      .all(run)
+      .some((row) => String(row.id).startsWith(id + "/"));
+  }
+  workflowInspect(run: string, offset = 0, limit = 100): WorkflowInspection {
+    if (
+      !Number.isSafeInteger(offset) ||
+      offset < 0 ||
+      offset > 1000000 ||
+      !Number.isSafeInteger(limit) ||
+      limit < 1 ||
+      limit > 200
+    )
+      throw new Error("Invalid workflow inspection window");
+    const exists = this.db
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='workflows'",
+      )
+      .get();
+    if (!exists)
+      return {
+        offset,
+        limit,
+        counts: { documents: 0, definitions: 0, workflows: 0, actions: 0 },
+        documents: [],
+        definitions: [],
+        workflows: [],
+        actions: [],
+      };
+    this.db.exec("BEGIN");
+    try {
+      const count = (table: string): number =>
+        Number(
+          this.db
+            .prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE run=?`)
+            .get(run)?.n,
+        );
+      const result: WorkflowInspection = {
+        offset,
+        limit,
+        counts: {
+          documents: count("workflow_documents"),
+          definitions: count("workflow_definitions"),
+          workflows: count("workflows"),
+          actions: count("action_owners"),
+        },
+        documents: this.db
+          .prepare(
+            "SELECT identity,value FROM workflow_documents WHERE run=? ORDER BY rowid LIMIT ? OFFSET ?",
+          )
+          .all(run, limit, offset)
+          .map((row) => ({
+            identity: String(row.identity),
+            value: parse<Json>(row.value),
+          })),
+        definitions: this.db
+          .prepare(
+            "SELECT identity,value,document FROM workflow_definitions WHERE run=? ORDER BY rowid LIMIT ? OFFSET ?",
+          )
+          .all(run, limit, offset)
+          .map((row) => ({
+            identity: String(row.identity),
+            value: parse<Json>(row.value),
+            documentIdentity: row.document as string | null,
+          })),
+        workflows: (
+          this.db
+            .prepare(
+              "SELECT * FROM workflows WHERE run=? ORDER BY rowid LIMIT ? OFFSET ?",
+            )
+            .all(run, limit, offset) as unknown as WorkflowRow[]
+        ).map((row) => ({
+          ...row,
+          binding: parse<WorkflowBinding>(row.binding),
+          raw: row.raw === null ? null : parse<Json>(row.raw),
+          result: row.result === null ? null : parse<Json>(row.result),
+          dispatchesUsed: Number(
+            this.db
+              .prepare(
+                "SELECT COUNT(*) AS n FROM workflow_usage WHERE run=? AND workflow=?",
+              )
+              .get(run, row.id)?.n,
+          ),
+        })),
+        actions: this.db
+          .prepare(
+            "SELECT id,kind,workflow,metadata FROM action_owners WHERE run=? ORDER BY rowid LIMIT ? OFFSET ?",
+          )
+          .all(run, limit, offset)
+          .map((row) => ({
+            id: String(row.id),
+            kind: String(row.kind),
+            workflow: row.workflow as string | null,
+            metadata: row.metadata === null ? null : parse<Json>(row.metadata),
+          })),
+      };
+      this.db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
   transaction<T>(fn: () => T): T {
     this.db.exec("BEGIN IMMEDIATE");
@@ -141,7 +465,15 @@ export class Store {
       );
     });
   }
-  action(run: string, id: string, identity: string): ActionRow {
+  action(
+    run: string,
+    id: string,
+    identity: string,
+    kind?: string,
+    workflow: string | null = null,
+    metadata?: Json,
+  ): ActionRow {
+    if (kind !== undefined) this.assertNamespace(run, id, workflow);
     this.db
       .prepare(
         "INSERT OR IGNORE INTO actions VALUES(?,?,?,'pending',NULL,NULL)",
@@ -152,6 +484,24 @@ export class Store {
       .get(run, id) as unknown as ActionRow;
     if (a.identity !== identity)
       throw new Error(`Action request changed: ${id}`);
+    if (kind !== undefined) {
+      const owned = this.db
+        .prepare("SELECT kind,workflow FROM action_owners WHERE run=? AND id=?")
+        .get(run, id);
+      if (owned && (owned.kind !== kind || owned.workflow !== workflow))
+        throw new Error("Action kind or workflow owner changed");
+      if (this.workflow(run, id))
+        throw new Error("Action ID belongs to a workflow invocation");
+      this.db
+        .prepare("INSERT OR IGNORE INTO action_owners VALUES(?,?,?,?,?)")
+        .run(
+          run,
+          id,
+          kind,
+          workflow,
+          metadata === undefined ? null : encode(metadata),
+        );
+    }
     return a;
   }
   finishAction(run: string, id: string, result: unknown, error?: string): void {
@@ -202,10 +552,26 @@ export class Store {
     session: string | undefined,
     budget?: Budget,
     paid = true,
-    kind: "model" | "command" = "model",
+    kind: "model" | "command" | "local" = "model",
     expectedSession?: NativeSession,
+    workflow: string | null = null,
   ): string {
     return this.transaction(() => {
+      this.assertNamespace(run, action, workflow);
+      this.checkWorkflow(run, workflow);
+      if (kind === "model")
+        for (const row of this.workflowAncestors(run, workflow)) {
+          const binding = parse<WorkflowBinding>(row.binding);
+          const used = Number(
+            this.db
+              .prepare(
+                "SELECT COUNT(*) AS n FROM workflow_usage WHERE run=? AND workflow=?",
+              )
+              .get(run, row.id)?.n,
+          );
+          if (binding.maxDispatches !== null && used >= binding.maxDispatches)
+            throw new Error("Workflow dispatch limit exhausted");
+        }
       if (paid) {
         const bad = this.db
           .prepare(
@@ -273,6 +639,11 @@ export class Store {
           paid ? (budget?.id ?? null) : null,
           Date.now(),
         );
+      if (kind === "model")
+        for (const row of this.workflowAncestors(run, workflow))
+          this.db
+            .prepare("INSERT INTO workflow_usage VALUES(?,?,?)")
+            .run(run, row.id, id);
       this.event(run, action, id, turn, "invocation.reserved", { paid, kind });
       return id;
     });

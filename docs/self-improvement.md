@@ -1,5 +1,11 @@
 # Trusted self-improvement workflow
 
+For an existing candidate that needs fixed checks and independent review, use
+the reusable [candidate verification child](designs/candidate-verification.md).
+It has standalone and two-parent examples. The self-improvement flow below
+keeps its existing writer, repair, scope, and native-session behavior; both flows
+reuse the same bounded check-evidence projection.
+
 Preparation plumbing only; no native-error fix or live qualification is included.
 `examples/self-improvement.ts` exports the ordinary
 `workflow(runtime, input, agents)` function. Reuse agent configs named `worker`

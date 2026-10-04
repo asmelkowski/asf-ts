@@ -60,7 +60,7 @@ test("execution deadline excludes cleanup grace but cancels a still-running comm
   const f = fixture();
   try {
     const success = await command(
-      ["/bin/true"],
+      [process.execPath, "-e", ""],
       f.dir,
       new AbortController().signal,
       100,

@@ -27,6 +27,10 @@ import type {
 } from "../src/types.js";
 import { fixture, pricing } from "./helpers.js";
 import { sleep } from "../src/util.js";
+import { localAdkProof } from "../examples/adk-proof.js";
+import { executeDocument } from "../src/portable/execute.js";
+import type { WorkflowDocument } from "../src/portable/model.js";
+import type { ProfileBinding } from "../src/profiles.js";
 
 function codexFixture(responses: string[] = ["ok"]) {
   let calls = 0;
@@ -988,3 +992,122 @@ test("native OpenCode retry policy hook denies the retry decision", async () => 
   await cleanup();
   assert.equal(disposed, true);
 });
+
+for (const target of ["codex", "opencode", "adk"] as const) {
+  test(`${target} executes and replays the same portable typed child document`, async () => {
+    const f = fixture(),
+      expected = { ok: true, marker: "local-adk" };
+    const native =
+      target === "codex"
+        ? codexFixture([JSON.stringify(expected)])
+        : target === "opencode"
+          ? openCodeFixture([JSON.stringify(expected)])
+          : null;
+    const h: Harness = native?.harness ?? localAdkProof();
+    try {
+      const model =
+        target === "adk"
+          ? "asf-local-proof"
+          : target === "opencode"
+            ? "test/model"
+            : "test-model";
+      const mode = target === "adk" ? "write" : "read-only";
+      const binding: ProfileBinding = {
+        agent: { harness: h, model, mode },
+        capabilities: {
+          revision: `${target}-offline-portable-v1`,
+          modes: [mode],
+          fresh: true,
+          nativeSystem: false,
+          strictTools: false,
+        },
+      };
+      const schema = {
+        type: "object",
+        properties: { ok: { type: "boolean" }, marker: { type: "string" } },
+        required: ["ok", "marker"],
+        additionalProperties: false,
+      };
+      const document: WorkflowDocument = {
+        format: "asf-ts-workflow/v1",
+        root: "delivery",
+        profiles: { worker: {} },
+        workflows: {
+          delivery: {
+            version: "1",
+            inputSchema: { type: "object", additionalProperties: false },
+            outputSchema: schema,
+            start: "review",
+            nodes: [
+              {
+                id: "review",
+                kind: "workflow",
+                workflow: "review",
+                input: { $ref: "#/input" },
+                maxDispatches: 1,
+                next: "end",
+              },
+              {
+                id: "end",
+                kind: "end",
+                output: { $ref: "#/nodes/review" },
+                passed: { $ref: "#/nodes/review/ok" },
+              },
+            ],
+          },
+          review: {
+            version: "1",
+            inputSchema: { type: "object", additionalProperties: false },
+            outputSchema: schema,
+            defaultProfile: "worker",
+            start: "reviewer",
+            nodes: [
+              {
+                id: "reviewer",
+                kind: "agent",
+                prompt:
+                  "Call marker if available, then return ok and marker as JSON.",
+                outputSchema: schema,
+                next: "end",
+              },
+              {
+                id: "end",
+                kind: "end",
+                output: { $ref: "#/nodes/reviewer" },
+                passed: { $ref: "#/nodes/reviewer/ok" },
+              },
+            ],
+          },
+        },
+      };
+      const run = () =>
+        f
+          .runtime({ live: true })
+          .run((r) =>
+            executeDocument(r, document, {}, { bindings: { worker: binding } }),
+          );
+      const first = await run();
+      assert.equal(first.passed, true);
+      assert.deepEqual(first.value, expected);
+      const rows = f.store.db
+        .prepare(
+          "SELECT l.data FROM ledger l JOIN invocations i ON i.id=l.invocation WHERE i.kind='model'",
+        )
+        .all();
+      assert.equal(rows.length, 1);
+      const account = JSON.parse(String(rows[0]!.data)) as Accounting;
+      assert.equal(account.status, "complete");
+      assert.ok(account.tokens && account.tokens.output > 0);
+      if (target === "adk")
+        assert.equal((account.raw as { modelCalls: number }).modelCalls, 2);
+      const before = f.store.inspect("run").totals;
+      assert.deepEqual(await run(), first);
+      assert.deepEqual(f.store.inspect("run").totals, before);
+      if (native) assert.equal(native.calls(), 1);
+      assert.equal(f.store.workflowInspect("run").workflows.length, 2);
+    } finally {
+      await h.close?.();
+      f.close();
+    }
+  });
+}

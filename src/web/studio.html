@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>ASF · Workflow Studio</title>
+    <link rel="stylesheet" href="/ui.css" />
+    <link rel="stylesheet" href="/studio.css" />
+    <script src="/persona-editor.js" defer></script>
+    <script src="/studio.js" defer></script>
+  </head>
+  <body class="studio-page">
+    <header class="studio-header">
+      <div class="studio-brand">
+        <span class="studio-brand-mark" aria-hidden="true">A</span>
+        <div>
+          <p class="studio-eyebrow">ASF / AUTHOR</p>
+          <h1>Workflow Studio</h1>
+        </div>
+      </div>
+      <nav class="studio-nav" aria-label="ASF views">
+        <a href="/">Inspect runs</a
+        ><strong aria-current="page">Author a workflow</strong
+        ><a href="/graph">Declared graphs</a>
+      </nav>
+      <p class="studio-intro">Compose, validate, and share agent workflows.</p>
+    </header>
+    <main>
+      <section class="studio-document-bar" aria-label="Document controls">
+        <div class="studio-toolbar-group">
+          <button id="studio-new">New workflow</button>
+          <button id="studio-persona-open">Manage personas</button>
+          <label class="studio-file-control"
+            >Open YAML or JSON<input
+              id="studio-file"
+              type="file"
+              accept=".json,.yaml,.yml,application/json"
+          /></label>
+        </div>
+        <div class="studio-toolbar-group studio-export-controls">
+          <span id="studio-status" role="status"
+            >Draft · validate before download</span
+          ><button id="studio-validate" class="studio-primary">Validate</button
+          ><label class="studio-format-label"
+            >Download format<select id="studio-format">
+              <option value="json">JSON</option>
+              <option value="yaml">YAML</option>
+            </select></label
+          ><button id="studio-download" disabled>Download document</button>
+        </div>
+      </section>
+      <p id="studio-message" role="status"></p>
+      <p id="studio-identity" class="studio-identity"></p>
+      <div class="studio-layout">
+        <aside class="studio-sidebar" aria-label="Workflow library">
+          <section class="studio-panel" aria-label="Workflow definitions">
+            <h2>Definitions</h2>
+            <label
+              >Selected definition<select id="studio-definition"></select
+            ></label>
+            <details>
+              <summary>Manage definitions</summary>
+              <label>Root workflow<select id="studio-root"></select></label>
+              <label
+                >New child name<input
+                  id="studio-child-name"
+                  placeholder="review" /></label
+              ><button id="studio-add-child" class="studio-full-width">
+                Add child definition
+              </button>
+            </details>
+          </section>
+          <section class="studio-panel studio-library">
+            <h2>Available blocks</h2>
+            <label
+              >Insert after<select id="studio-insert-port">
+                <option value="auto">Auto connection</option>
+              </select></label
+            >
+            <div id="studio-catalogue" class="studio-catalogue"></div>
+          </section>
+          <details open class="studio-panel">
+            <summary>Workflow settings</summary>
+            <form id="studio-workflow-form"></form>
+          </details>
+          <details class="studio-panel">
+            <summary>Advanced persona JSON</summary>
+            <label
+              >Named profile intents (JSON)<textarea
+                id="studio-profiles"
+                rows="8"
+                spellcheck="false"
+              ></textarea>
+            </label>
+            <p class="studio-hint">
+              Named personas can be shared by workflows and agent nodes. Each
+              child workflow uses its own default.
+            </p>
+          </details>
+        </aside>
+        <section class="studio-canvas" aria-label="Declared workflow graph">
+          <div class="studio-canvas-header">
+            <div>
+              <p class="studio-eyebrow">CANVAS</p>
+              <h2 id="studio-graph-title">Declared workflow</h2>
+            </div>
+            <button id="studio-arrange">Arrange blocks</button>
+          </div>
+          <div class="studio-canvas-tools" aria-label="Canvas controls">
+            <div class="studio-toolbar-group">
+              <button
+                id="studio-zoom-out"
+                aria-label="Zoom out"
+                title="Zoom out"
+              >
+                −</button
+              ><output id="studio-zoom-label" aria-live="polite">100%</output
+              ><button id="studio-zoom-in" aria-label="Zoom in" title="Zoom in">
+                +</button
+              ><button id="studio-zoom-fit">Fit view</button>
+            </div>
+            <span class="studio-canvas-caption"
+              >Drag blocks to move · drag empty space to pan</span
+            >
+          </div>
+          <div id="studio-graph-scroll">
+            <svg
+              id="studio-graph"
+              aria-label="Workflow blocks and transitions"
+              aria-describedby="studio-canvas-help"
+            ></svg>
+          </div>
+          <div class="studio-canvas-footer">
+            <p id="studio-canvas-help" class="studio-hint">
+              Select with click or Tab. Move with drag, arrow keys, or the move
+              buttons. Placement changes layout only.
+            </p>
+            <span class="studio-view-badge">DECLARED FLOW</span>
+          </div>
+        </section>
+        <aside class="studio-properties" aria-label="Block properties">
+          <section class="studio-panel">
+            <p class="studio-eyebrow">PROPERTIES</p>
+            <h2 id="studio-node-title">Selected block</h2>
+            <div
+              class="studio-position-tools"
+              role="group"
+              aria-label="Move selected block"
+            >
+              <span>Move block</span
+              ><button
+                id="studio-move-left"
+                aria-label="Move block left"
+                title="Move block left"
+              >
+                ←</button
+              ><button
+                id="studio-move-up"
+                aria-label="Move block up"
+                title="Move block up"
+              >
+                ↑</button
+              ><button
+                id="studio-move-down"
+                aria-label="Move block down"
+                title="Move block down"
+              >
+                ↓</button
+              ><button
+                id="studio-move-right"
+                aria-label="Move block right"
+                title="Move block right"
+              >
+                →
+              </button>
+            </div>
+            <form id="studio-node-form"></form>
+            <div id="studio-child-contract"></div>
+            <button id="studio-delete" class="studio-danger">
+              Delete selected block
+            </button>
+          </section>
+        </aside>
+      </div>
+      <details id="studio-source-panel" class="studio-source studio-panel">
+        <summary>YAML / JSON source</summary>
+        <label
+          >Workflow source<textarea
+            id="studio-source"
+            rows="16"
+            spellcheck="false"
+          ></textarea></label
+        ><button id="studio-apply-source">Apply source and validate</button>
+        <p class="studio-hint">
+          Apply source edits before using the canvas. Export normalizes
+          formatting and comments.
+        </p>
+      </details>
+      <footer class="studio-page-footer">
+        Export a validated YAML or JSON document. Compile, run, render, and
+        bundle it with the ASF CLI.
+      </footer>
+      <dialog id="studio-persona-dialog" aria-labelledby="studio-persona-title">
+        <header class="studio-persona-header">
+          <div>
+            <p class="studio-eyebrow">AGENT CONFIGURATION</p>
+            <h2 id="studio-persona-title">Personas</h2>
+            <p class="studio-hint">
+              Reuse personas through workflow defaults and Agent block profiles.
+            </p>
+          </div>
+          <button id="studio-persona-close" type="button">Close</button>
+        </header>
+        <div class="studio-persona-layout">
+          <aside class="studio-persona-library" aria-label="Persona library">
+            <label for="studio-persona-list">Selected persona</label>
+            <select id="studio-persona-list" size="6"></select>
+            <label for="studio-persona-new-name">New persona name</label>
+            <input id="studio-persona-new-name" placeholder="reviewer" />
+            <button id="studio-persona-add" type="button">
+              Create persona
+            </button>
+            <label class="studio-file-control"
+              >Connect marketplace catalogue<input
+                id="studio-persona-catalogue-file"
+                type="file"
+                accept=".json,application/json"
+              />
+            </label>
+            <p class="studio-hint">
+              Catalogue entries are available choices. Selected plugins must be
+              active in the local agent before execution.
+            </p>
+          </aside>
+          <section
+            class="studio-persona-settings"
+            aria-label="Persona settings"
+          >
+            <p id="studio-persona-message" role="status"></p>
+            <form id="studio-persona-form"></form>
+            <div class="studio-persona-identity">
+              <label for="studio-persona-rename-name">Rename persona</label>
+              <input id="studio-persona-rename-name" />
+              <div class="studio-toolbar-group">
+                <button id="studio-persona-rename" type="button">Rename</button>
+                <button
+                  id="studio-persona-delete"
+                  type="button"
+                  class="studio-danger"
+                >
+                  Delete persona
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </dialog>
+    </main>
+  </body>
+</html>

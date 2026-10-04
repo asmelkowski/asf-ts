@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import type { AgentConfig, CommandResult, Json } from "../src/types.js";
 import type { Runtime } from "../src/runtime.js";
 import { command } from "../src/process.js";
+import { selectCheckEvidence as selectedCheck } from "../src/verification.js";
 
 const helper = fileURLToPath(
   new URL("../scripts/self-improvement-files.mjs", import.meta.url),
@@ -43,42 +44,6 @@ function evidence<T>(result: CommandResult): T {
   if (result.code !== 0 || result.truncated)
     throw new Error(`Source scope/snapshot failed: ${result.stderr}`);
   return JSON.parse(result.stdout) as T;
-}
-function selectedCheck(result: CommandResult) {
-  // Select only retained bytes, without changing the durable raw command evidence.
-  const select = (text: string) => {
-    const match =
-      /^(?:\s*(?:not ok\b|AssertionError\b|(?:Type|Syntax|Reference)?Error\b|error\b|FAIL\b)|.*\berror TS\d+:|.*\b(?:ERR_ASSERTION|ERR_TEST_FAILURE)\b)/im.exec(
-        text,
-      );
-    const bytes = Buffer.from(text);
-    const diagnostic = match !== null;
-    let start =
-      result.code !== 0
-        ? diagnostic
-          ? Math.max(0, Buffer.byteLength(text.slice(0, match.index)) - 200)
-          : Math.max(0, bytes.length - 3000)
-        : 0;
-    while (start < bytes.length && (bytes[start]! & 0xc0) === 0x80) start++;
-    // Streaming decode omits a partial trailing UTF-8 character; no invented text.
-    const excerpt = new TextDecoder().decode(
-      bytes.subarray(start, start + 3000),
-      { stream: true },
-    );
-    return { excerpt, diagnostic, truncated: start > 0 || bytes.length > 3000 };
-  };
-  const stdout = select(result.stdout),
-    stderr = select(result.stderr);
-  return {
-    code: result.code,
-    signal: result.signal,
-    cancelled: result.cancelled,
-    captureTruncated: result.truncated,
-    selectedOutputTruncated: stdout.truncated || stderr.truncated,
-    diagnosticAvailable: stdout.diagnostic || stderr.diagnostic,
-    stdoutExcerpt: stdout.excerpt,
-    stderrExcerpt: stderr.excerpt,
-  };
 }
 export async function workflow(
   r: Runtime,

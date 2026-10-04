@@ -363,7 +363,7 @@ test("uncertain host command is not resent or repaired on explicit resume", asyn
           id,
           hash({
             argv,
-            cwd: f.cwd,
+            cwd: runtime.cwd,
             timeoutMs: options?.timeoutMs ?? 60000,
             policy: 1,
           }),

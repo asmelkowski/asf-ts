@@ -1,8 +1,12 @@
 # ASF TypeScript workflow core
 
-Small SDK-first workflow runtime for **Node 22.22.x / Linux**. Ordinary async TypeScript, explicit durable actions, native sessions, bounded JSON correction, commands, and parallel scopes. This is an independent implementation, not Python ASF parity.
+Small SDK-first workflow runtime for **Node 22.22.x / Linux**. Ordinary async TypeScript, explicit durable actions, native sessions, bounded JSON correction, commands, and parallel scopes. This is an independent implementation with optional portable workflow authoring.
 
 **Accounting is mandatory; content tracing is optional.** Costs are scoped estimates, not invoices. Unknown/failed accounting blocks further model dispatch. An uncertain send is never automatically repeated.
+
+## Portable authoring and composition
+
+Portable YAML/JSON, typed child workflows, profiles, file-driven TypeScript generation, rendering, bundles, and an optional Google ADK proof build on the existing durable runtime. The local UI preserves its execution inspector and adds document authoring. Generation and execution stay in the CLI/library. See the [portable guide](docs/portable.md), [port design](docs/designs/ts-port.md), [decisions](docs/adr), and [delivery evidence](docs/evidence/ts-port-delivery.md).
 
 ## Run offline
 
@@ -63,7 +67,7 @@ npm run asf -- serve --db .asf/store.db --port 8080
 node dist/src/cli.js serve --db .asf/store.db --port 8080
 ```
 
-Open the printed `http://127.0.0.1:8080/` URL. The database must already exist; omit `--port` for an ephemeral port. Select a run, then click an execution-map card or turn to read retained final responses, errors, command outputs, session IDs and provider observations in the panel alongside it (stacked on mobile). Action/turn dropdowns remain available for keyboard navigation. There are no dispatch, retry or editing controls. Costs show the **known subtotal plus unresolved invocations**, not an invoice or cumulative reports added to final ledger.
+Open the printed `http://127.0.0.1:8080/` URL. `serve` initializes a missing database, then opens it read-only; omit `--port` for an ephemeral port. Select a run, then click an execution-map card or turn to read retained final responses, errors, command outputs, session IDs and provider observations in the panel alongside it (stacked on mobile). Action/turn dropdowns remain available for keyboard navigation. The inspector has no dispatch, retry or editing controls. Author portable documents at `/studio` and inspect declared graphs at `/graph`; see the [portable guide](docs/portable.md). Costs show the **known subtotal plus unresolved invocations**, not an invoice or cumulative reports added to final ledger.
 
 The **execution map** groups explicit action-ID scope prefixes into lanes, with distinct agent and command cards. It is a page-local view, **not a dependency DAG**: placement does not infer causal/data flow, parallelism or timing intervals. Dashed session rails link only recorded session membership; numbered turns show within-action order (including corrections), with possible gaps. Session labels are page-local. Missing action/invocation records remain explicit, and a completed run does not override a pending node. Card costs are **visible final-ledger subtotals**, including known auxiliary amounts, never full-action totals or reports added to ledger. Unknown is not zero. This is presentation over ordinary async TypeScript, not a graph engine.
 
@@ -88,7 +92,7 @@ Uses pinned Playwright/Chromium and an actual `recordVideo` browser context agai
 
 Artifacts (overwritten on reproduction): `.asf/ui-verification/workflow-ui.webm` and `workflow-ui.png`. Database fixtures are retained in their unique directories; these ignored artifacts are not committed.
 
-[Verification results](docs/verification.md): Codex passed five live turns covering tools, native continuation, writing, and same-session correction; replay sent no new requests. OpenCode historically also passed five live ASF turns and account-free replay on the explicitly authorized `opencode-go/gpt-5.6-luna` route, with real tools, native continuation/correction and complete **declared-scope estimates**. Private API-key provisioning is opt-in; global auth is not imported or changed. The earlier free-route HTTP 403 and its unresolved accounting remain preserved, and no invoice-completeness claim is made. No Claude/Cursor adapters, councils, executable workflow graph, broker, or automatic uncertain-send reconciliation are included.
+[Verification results](docs/verification.md): Codex passed five live turns covering tools, native continuation, writing, and same-session correction; replay sent no new requests. OpenCode historically also passed five live ASF turns and account-free replay on the explicitly authorized `opencode-go/gpt-5.6-luna` route, with real tools, native continuation/correction and complete **declared-scope estimates**. Private API-key provisioning is opt-in; global auth is not imported or changed. The earlier free-route HTTP 403 and its unresolved accounting remain preserved, and no invoice-completeness claim is made. Portable graphs now lower into the same durable Runtime. No additional agentic frameworks or automatic uncertain-send reconciliation are included.
 
 ### Separately authorized real Codex recording
 

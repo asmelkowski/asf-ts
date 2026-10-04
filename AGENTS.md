@@ -1,6 +1,10 @@
 # Agent guidance
 
-## Boundaries and authorization
+## Current delivery scope
+
+The user authorized the 2026-10-04 port of Python PR #21 to ASF-TS, including optional portable graphs, visual authoring, Google ADK proof, tests, documents, commits, feature PRs, self-review and merges into an integration branch. Work in the task checkout and its worktrees. This scope supersedes the historical path, no-graph/UI, and no-publication restrictions below. Keep credential, private-session, accounting, and separately authorized live-model boundaries. See `docs/designs/ts-port.md`.
+
+## Historical boundaries and authorization
 
 - Work only in `/root/asf-ts`. `/root/asf` (including untracked `typescript/`) is read-only reference; never copy it wholesale.
 - The user authorized v1 implementation, tests, CI, documentation, and offline qualification. The previous documentation-only restriction is superseded.
