@@ -1,0 +1,119 @@
+{
+  "format": "asf-review-appearance-acceptance/v1",
+  "observedAt": "2026-10-04T17:17:34.717Z",
+  "browser": "141.0.7390.37",
+  "artifact": "docs/review/pr12-review.html",
+  "artifactFilename": "pr12-review.html",
+  "artifactSha256": "0b8b020e4d2f6cd9f8d01816d5d8f481d7eb614f1991f8772d267ab1c31c7847",
+  "artifactBytes": 2529769,
+  "base": "bd82062e27407e6cec6799ef22d632a123186d33",
+  "head": "4b3885838c7c6266808529310b3f3f39833889cd",
+  "changedFiles": 126,
+  "questions": 24,
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "touch": true
+    }
+  ],
+  "cases": [
+    {
+      "viewport": "desktop",
+      "name": "all-five-tabs-and-five-review-areas",
+      "passed": true
+    },
+    {
+      "viewport": "desktop",
+      "name": "keyboard-tab-navigation-and-area-activation-with-visible-focus",
+      "passed": true
+    },
+    {
+      "viewport": "desktop",
+      "name": "complete-126-file-inventory-area-type-search-and-exact-source-base-diff",
+      "passed": true
+    },
+    {
+      "viewport": "desktop",
+      "name": "exact-reference-line-jump-and-keyboard-code-search",
+      "path": "src/http.ts",
+      "line": 132,
+      "passed": true
+    },
+    {
+      "viewport": "desktop",
+      "name": "decision-area-text-filters-literal-source-and-scoped-evidence-history",
+      "passed": true
+    },
+    {
+      "viewport": "desktop",
+      "name": "checkpoint-file-status-note-persistence-and-real-json-markdown-downloads",
+      "passed": true
+    },
+    {
+      "viewport": "mobile",
+      "name": "all-five-tabs-and-five-review-areas",
+      "passed": true
+    },
+    {
+      "viewport": "mobile",
+      "name": "keyboard-tab-navigation-and-area-activation-with-visible-focus",
+      "passed": true
+    },
+    {
+      "viewport": "mobile",
+      "name": "complete-126-file-inventory-area-type-search-and-exact-source-base-diff",
+      "passed": true
+    },
+    {
+      "viewport": "mobile",
+      "name": "exact-reference-line-jump-and-keyboard-code-search",
+      "path": "src/http.ts",
+      "line": 132,
+      "passed": true
+    },
+    {
+      "viewport": "mobile",
+      "name": "decision-area-text-filters-literal-source-and-scoped-evidence-history",
+      "passed": true
+    },
+    {
+      "viewport": "mobile",
+      "name": "checkpoint-file-status-note-persistence-and-real-json-markdown-downloads",
+      "passed": true
+    }
+  ],
+  "screenshots": [
+    {
+      "viewport": "desktop",
+      "path": "evidence/appearance-desktop-route.png"
+    },
+    {
+      "viewport": "desktop",
+      "path": "evidence/appearance-desktop-code.png"
+    },
+    {
+      "viewport": "desktop",
+      "path": "evidence/appearance-desktop-export.png"
+    },
+    {
+      "viewport": "mobile",
+      "path": "evidence/appearance-mobile-route.png"
+    },
+    {
+      "viewport": "mobile",
+      "path": "evidence/appearance-mobile-code.png"
+    },
+    {
+      "viewport": "mobile",
+      "path": "evidence/appearance-mobile-export.png"
+    }
+  ],
+  "pageErrors": [],
+  "externalRequests": [],
+  "scope": "Independent actual headless Chromium desktop/mobile qualification of the frozen standalone HTML. Synthetic reviewer state; file/data URLs only. No native app or user-owned tabs, no providers, no repository product edits. Focused keyboard/mobile checks are not an accessibility certification."
+}

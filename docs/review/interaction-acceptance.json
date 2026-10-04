@@ -1,0 +1,41 @@
+{
+  "observedAt": "2026-10-04T17:17:38.240Z",
+  "browser": "141.0.7390.37",
+  "artifact": "docs/review/pr12-review.html",
+  "artifactSha256": "0b8b020e4d2f6cd9f8d01816d5d8f481d7eb614f1991f8772d267ab1c31c7847",
+  "artifactBytes": 2529769,
+  "base": "bd82062e27407e6cec6799ef22d632a123186d33",
+  "head": "4b3885838c7c6266808529310b3f3f39833889cd",
+  "cases": [
+    {
+      "name": "large-unicode-export-import",
+      "bytes": 781049,
+      "passed": true
+    },
+    {
+      "name": "maximum-fields-with-six-byte-json-escapes",
+      "bytes": 1567388,
+      "passed": true
+    },
+    {
+      "name": "first-previous-selects-last-and-next-wraps",
+      "matches": 15,
+      "passed": true
+    },
+    {
+      "name": "reset-owns-state-over-pending-import",
+      "passed": true
+    },
+    {
+      "name": "new-edit-owns-state-over-pending-import",
+      "passed": true
+    },
+    {
+      "name": "newer-import-owns-state-over-older-completion",
+      "passed": true
+    }
+  ],
+  "pageErrors": [],
+  "externalRequests": [],
+  "scope": "Actual standalone file in headless Chromium; synthetic review data and deferred File.text fixtures. No product files changed or live providers called. Desktop/mobile appearance is a separate root browser check."
+}
